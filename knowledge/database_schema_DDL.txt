@@ -1,0 +1,380 @@
+-- bebel.agendamentos definition
+
+-- Drop table
+
+-- DROP TABLE bebel.agendamentos;
+
+CREATE TABLE bebel.agendamentos (
+	id_agendamento bigserial NOT NULL,
+	id_profissional int8 NOT NULL,
+	id_pessoa int8 NOT NULL,
+	inicio timestamptz NOT NULL,
+	fim timestamptz NULL,
+	status public."ag_status" DEFAULT 'PENDENTE'::ag_status NOT NULL,
+	origem varchar(40) DEFAULT 'SISTEMA'::character varying NULL,
+	observacoes text NULL,
+	criado_em timestamptz DEFAULT now() NULL,
+	atualizado_em timestamptz DEFAULT now() NULL,
+	CONSTRAINT agendamentos_id_profissional_inicio_key UNIQUE (id_profissional, inicio),
+	CONSTRAINT agendamentos_pkey PRIMARY KEY (id_agendamento)
+);
+CREATE INDEX idx_agenda_prof_inicio ON bebel.agendamentos USING btree (id_profissional, inicio);
+
+
+-- bebel.ai_analysis_types definition
+
+-- Drop table
+
+-- DROP TABLE bebel.ai_analysis_types;
+
+CREATE TABLE bebel.ai_analysis_types (
+	analysis_type varchar(60) NOT NULL,
+	description text NULL,
+	CONSTRAINT ai_analysis_types_pkey PRIMARY KEY (analysis_type)
+);
+
+
+-- bebel.intent_labels definition
+
+-- Drop table
+
+-- DROP TABLE bebel.intent_labels;
+
+CREATE TABLE bebel.intent_labels (
+	intent_code varchar(60) NOT NULL,
+	description text NULL,
+	active bool DEFAULT true NOT NULL,
+	generate_pendencia bool DEFAULT false NOT NULL,
+	generate_pendencia_instructions text NULL,
+	CONSTRAINT intent_labels_pkey PRIMARY KEY (intent_code)
+);
+
+
+-- bebel.pessoas definition
+
+-- Drop table
+
+-- DROP TABLE bebel.pessoas;
+
+CREATE TABLE bebel.pessoas (
+	id_pessoa bigserial NOT NULL,
+	status bebel."pessoa_status" DEFAULT 'LEAD'::bebel.pessoa_status NOT NULL,
+	nome_completo varchar(150) NULL,
+	data_nascimento date NULL,
+	cpf varchar(14) NULL,
+	observacoes text NULL,
+	origem varchar(80) NULL,
+	utm jsonb NULL,
+	criado_em timestamptz DEFAULT now() NULL,
+	atualizado_em timestamptz DEFAULT now() NULL,
+	stage bebel."lead_stage" DEFAULT 'NOVO'::bebel.lead_stage NOT NULL,
+	lead_score int4 DEFAULT 0 NOT NULL,
+	consent_marketing bool DEFAULT false NOT NULL,
+	consent_updated_em timestamptz NULL,
+	CONSTRAINT pessoas_pkey PRIMARY KEY (id_pessoa)
+);
+CREATE UNIQUE INDEX uq_pessoa_cpf_paciente ON bebel.pessoas USING btree (cpf) WHERE ((cpf IS NOT NULL) AND (status = 'PACIENTE'::bebel.pessoa_status));
+
+
+-- bebel.profissionais definition
+
+-- Drop table
+
+-- DROP TABLE bebel.profissionais;
+
+CREATE TABLE bebel.profissionais (
+	id_profissional bigserial NOT NULL,
+	nome_completo varchar(150) NOT NULL,
+	especialidade varchar(120) NULL,
+	ativo bool DEFAULT true NOT NULL,
+	criado_em timestamptz DEFAULT now() NULL,
+	atualizado_em timestamptz DEFAULT now() NULL,
+	CONSTRAINT profissionais_pkey PRIMARY KEY (id_profissional)
+);
+
+
+-- bebel.quality_labels definition
+
+-- Drop table
+
+-- DROP TABLE bebel.quality_labels;
+
+CREATE TABLE bebel.quality_labels (
+	quality_code varchar(60) NOT NULL,
+	description text NULL,
+	active bool DEFAULT true NOT NULL,
+	CONSTRAINT quality_labels_pkey PRIMARY KEY (quality_code)
+);
+
+
+-- bebel.risk_labels definition
+
+-- Drop table
+
+-- DROP TABLE bebel.risk_labels;
+
+CREATE TABLE bebel.risk_labels (
+	risk_code varchar(60) NOT NULL,
+	severity int4 NOT NULL,
+	description text NULL,
+	active bool DEFAULT true NOT NULL,
+	CONSTRAINT risk_labels_pkey PRIMARY KEY (risk_code),
+	CONSTRAINT risk_labels_severity_check CHECK (((severity >= 1) AND (severity <= 5)))
+);
+
+
+-- bebel.ai_jobs definition
+
+-- Drop table
+
+-- DROP TABLE bebel.ai_jobs;
+
+CREATE TABLE bebel.ai_jobs (
+	id_job bigserial NOT NULL,
+	scope_type varchar(20) NOT NULL,
+	id_scope int8 NOT NULL,
+	analysis_type varchar(60) NOT NULL,
+	status varchar(20) DEFAULT 'PENDING'::character varying NOT NULL,
+	priority int4 DEFAULT 5 NOT NULL,
+	attempt_count int4 DEFAULT 0 NOT NULL,
+	last_error text NULL,
+	scheduled_for timestamptz NULL,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	updated_at timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT ai_jobs_pkey PRIMARY KEY (id_job),
+	CONSTRAINT ai_jobs_scope_type_id_scope_analysis_type_key UNIQUE (scope_type, id_scope, analysis_type),
+	CONSTRAINT ai_jobs_analysis_type_fkey FOREIGN KEY (analysis_type) REFERENCES bebel.ai_analysis_types(analysis_type)
+);
+CREATE INDEX idx_ai_jobs_status ON bebel.ai_jobs USING btree (status, priority, scheduled_for NULLS FIRST, created_at);
+
+
+-- bebel.channel_identities definition
+
+-- Drop table
+
+-- DROP TABLE bebel.channel_identities;
+
+CREATE TABLE bebel.channel_identities (
+	id_identity bigserial NOT NULL,
+	id_pessoa int8 NOT NULL,
+	canal bebel."canal_mensagem" NOT NULL,
+	external_id varchar(191) NOT NULL,
+	display_name varchar(191) NULL,
+	provider varchar(80) NULL,
+	instance_name varchar(120) NULL,
+	criado_em timestamptz DEFAULT now() NULL,
+	atualizado_em timestamptz DEFAULT now() NULL,
+	CONSTRAINT channel_identities_canal_external_id_key UNIQUE (canal, external_id),
+	CONSTRAINT channel_identities_pkey PRIMARY KEY (id_identity),
+	CONSTRAINT channel_identities_id_pessoa_fkey FOREIGN KEY (id_pessoa) REFERENCES bebel.pessoas(id_pessoa) ON DELETE CASCADE
+);
+CREATE INDEX idx_channel_identities_pessoa ON bebel.channel_identities USING btree (id_pessoa, canal);
+
+
+-- bebel.conversas definition
+
+-- Drop table
+
+-- DROP TABLE bebel.conversas;
+
+CREATE TABLE bebel.conversas (
+	id_conversa bigserial NOT NULL,
+	id_pessoa int8 NOT NULL,
+	canal bebel."canal_mensagem" NOT NULL,
+	status varchar DEFAULT 'OPEN'::character varying NOT NULL,
+	started_at timestamptz DEFAULT now() NOT NULL,
+	ended_at timestamptz NULL,
+	last_message_at timestamptz NULL,
+	topic text NULL,
+	meta jsonb NULL,
+	origem varchar(80) NULL,
+	criado_em timestamptz DEFAULT now() NULL,
+	atualizado_em timestamptz DEFAULT now() NULL,
+	resumo_conversa text NULL,
+	CONSTRAINT conversas_pkey PRIMARY KEY (id_conversa),
+	CONSTRAINT conversas_id_pessoa_fkey FOREIGN KEY (id_pessoa) REFERENCES bebel.pessoas(id_pessoa) ON DELETE CASCADE
+);
+CREATE INDEX idx_conversas_lastmsg ON bebel.conversas USING btree (last_message_at DESC);
+CREATE INDEX idx_conversas_lookup ON bebel.conversas USING btree (id_pessoa, canal, status);
+
+
+
+-- bebel.mensagens definition
+
+-- Drop table
+
+-- DROP TABLE bebel.mensagens;
+
+CREATE TABLE bebel.mensagens (
+	id_mensagem bigserial NOT NULL,
+	id_conversa int8 NOT NULL,
+	id_pessoa int8 NULL,
+	canal bebel."canal_mensagem" NOT NULL,
+	"direction" bebel."msg_direction" NOT NULL,
+	from_me bool DEFAULT false NOT NULL,
+	sender_external_id varchar(191) NULL,
+	message_external_id varchar(191) NULL,
+	"text" text NULL,
+	payload jsonb NULL,
+	media_url text NULL,
+	media_mime varchar(120) NULL,
+	reply_to_external_id varchar(191) NULL,
+	reaction varchar(16) NULL,
+	event_type varchar(80) NULL,
+	processed bool DEFAULT false NOT NULL,
+	process_before timestamptz NULL,
+	provider varchar(80) NULL,
+	instance_id varchar(120) NULL,
+	instance_name varchar(120) NULL,
+	chat_external_id varchar(191) NULL,
+	pushname varchar(150) NULL,
+	created_at_provider timestamptz NOT NULL,
+	created_at_ingest timestamptz DEFAULT now() NOT NULL,
+	atualizado_em timestamptz NULL,
+	CONSTRAINT mensagens_pkey PRIMARY KEY (id_mensagem),
+	CONSTRAINT mensagens_id_conversa_fkey FOREIGN KEY (id_conversa) REFERENCES bebel.conversas(id_conversa) ON DELETE CASCADE,
+	CONSTRAINT mensagens_id_pessoa_fkey FOREIGN KEY (id_pessoa) REFERENCES bebel.pessoas(id_pessoa) ON DELETE SET NULL
+);
+CREATE INDEX idx_msg_conversa_time ON bebel.mensagens USING btree (id_conversa, created_at_provider);
+CREATE INDEX idx_msg_lookup_ext ON bebel.mensagens USING btree (canal, message_external_id);
+CREATE INDEX idx_msg_process_queue ON bebel.mensagens USING btree (processed, process_before);
+CREATE INDEX ix_msg_by_conversa ON bebel.mensagens USING btree (id_conversa, id_mensagem);
+CREATE UNIQUE INDEX uq_mensagens_instance_msg ON bebel.mensagens USING btree (instance_id, message_external_id);
+
+-- Table Triggers
+
+create trigger tg_mensagens_after_ins after
+insert
+    on
+    bebel.mensagens for each row execute function bebel.fn_sync_conversa_lastmsg();
+create trigger tg_mensagens_ai_queue after
+insert
+    on
+    bebel.mensagens for each row execute function bebel.fn_enqueue_msg_ai_job();
+
+
+-- bebel.message_analyses definition
+
+-- Drop table
+
+-- DROP TABLE bebel.message_analyses;
+
+CREATE TABLE bebel.message_analyses (
+	id_msg_analysis bigserial NOT NULL,
+	id_mensagem int8 NOT NULL,
+	model varchar(80) NOT NULL,
+	analysis_type varchar(60) NOT NULL,
+	sentiment varchar(20) NULL,
+	sentiment_score numeric(4, 3) NULL,
+	response_needed bool NULL,
+	language_quality_score numeric(4, 3) NULL,
+	summary text NULL,
+	details jsonb NULL,
+	created_at timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT message_analyses_id_mensagem_analysis_type_model_key UNIQUE (id_mensagem, analysis_type, model),
+	CONSTRAINT message_analyses_pkey PRIMARY KEY (id_msg_analysis),
+	CONSTRAINT message_analyses_analysis_type_fkey FOREIGN KEY (analysis_type) REFERENCES bebel.ai_analysis_types(analysis_type),
+	CONSTRAINT message_analyses_id_mensagem_fkey FOREIGN KEY (id_mensagem) REFERENCES bebel.mensagens(id_mensagem) ON DELETE CASCADE
+);
+CREATE INDEX idx_msg_analyses_msg ON bebel.message_analyses USING btree (id_mensagem);
+CREATE INDEX ix_anl_by_msg_type ON bebel.message_analyses USING btree (id_mensagem, analysis_type);
+
+
+-- bebel.message_intents definition
+
+-- Drop table
+
+-- DROP TABLE bebel.message_intents;
+
+CREATE TABLE bebel.message_intents (
+	id_mensagem int8 NOT NULL,
+	intent_code varchar(60) NOT NULL,
+	confidence numeric(4, 3) NULL,
+	CONSTRAINT message_intents_pkey PRIMARY KEY (id_mensagem, intent_code),
+	CONSTRAINT message_intents_id_mensagem_fkey FOREIGN KEY (id_mensagem) REFERENCES bebel.mensagens(id_mensagem) ON DELETE CASCADE,
+	CONSTRAINT message_intents_intent_code_fkey FOREIGN KEY (intent_code) REFERENCES bebel.intent_labels(intent_code)
+);
+
+
+-- bebel.message_quality_issues definition
+
+-- Drop table
+
+-- DROP TABLE bebel.message_quality_issues;
+
+CREATE TABLE bebel.message_quality_issues (
+	id_mensagem int8 NOT NULL,
+	quality_code varchar(60) NOT NULL,
+	confidence numeric(4, 3) NULL,
+	CONSTRAINT message_quality_issues_pkey PRIMARY KEY (id_mensagem, quality_code),
+	CONSTRAINT message_quality_issues_id_mensagem_fkey FOREIGN KEY (id_mensagem) REFERENCES bebel.mensagens(id_mensagem) ON DELETE CASCADE,
+	CONSTRAINT message_quality_issues_quality_code_fkey FOREIGN KEY (quality_code) REFERENCES bebel.quality_labels(quality_code)
+);
+
+
+-- bebel.message_risks definition
+
+-- Drop table
+
+-- DROP TABLE bebel.message_risks;
+
+CREATE TABLE bebel.message_risks (
+	id_mensagem int8 NOT NULL,
+	risk_code varchar(60) NOT NULL,
+	detected bool DEFAULT true NOT NULL,
+	confidence numeric(4, 3) NULL,
+	CONSTRAINT message_risks_pkey PRIMARY KEY (id_mensagem, risk_code),
+	CONSTRAINT message_risks_id_mensagem_fkey FOREIGN KEY (id_mensagem) REFERENCES bebel.mensagens(id_mensagem) ON DELETE CASCADE,
+	CONSTRAINT message_risks_risk_code_fkey FOREIGN KEY (risk_code) REFERENCES bebel.risk_labels(risk_code)
+);
+
+
+-- bebel.pendencia_sinalizada definition
+
+-- Drop table
+
+-- DROP TABLE bebel.pendencia_sinalizada;
+
+CREATE TABLE bebel.pendencia_sinalizada (
+	id_pendencia_sinalizada bigserial NOT NULL,
+	id_conversa int8 NOT NULL,
+	id_mensagem_origem int8 NULL,
+	tipo text NOT NULL,
+	descricao text NULL,
+	prioridade int4 NULL,
+	sla_at timestamptz NULL,
+	status text DEFAULT 'SINALIZADA'::text NOT NULL,
+	detected_at timestamptz DEFAULT now() NOT NULL,
+	resolved_at timestamptz NULL,
+	resolution_note text NULL,
+	CONSTRAINT pendencia_sinalizada_pkey PRIMARY KEY (id_pendencia_sinalizada),
+	CONSTRAINT pendencia_sinalizada_prioridade_check CHECK (((prioridade >= 1) AND (prioridade <= 5))),
+	CONSTRAINT pendencia_sinalizada_status_check CHECK ((status = ANY (ARRAY['SINALIZADA'::text, 'RESOLVIDA'::text, 'IGNORADA'::text]))),
+	CONSTRAINT pendencia_sinalizada_id_conversa_fkey FOREIGN KEY (id_conversa) REFERENCES bebel.conversas(id_conversa),
+	CONSTRAINT pendencia_sinalizada_tipo_fkey FOREIGN KEY (tipo) REFERENCES bebel.intent_labels(intent_code) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE INDEX ix_pendencia_sinalizada_tipo ON bebel.pendencia_sinalizada USING btree (tipo);
+CREATE UNIQUE INDEX ux_pendencia_sinalizada_open ON bebel.pendencia_sinalizada USING btree (id_conversa, tipo) WHERE (status = 'SINALIZADA'::text);
+
+
+-- bebel.pessoas_contatos definition
+
+-- Drop table
+
+-- DROP TABLE bebel.pessoas_contatos;
+
+CREATE TABLE bebel.pessoas_contatos (
+	id_contato bigserial NOT NULL,
+	id_pessoa int8 NOT NULL,
+	tipo bebel."contato_tipo" NOT NULL,
+	valor varchar(180) NOT NULL,
+	valor_norm varchar(180) NOT NULL,
+	preferencial bool DEFAULT false NOT NULL,
+	criado_em timestamptz DEFAULT now() NULL,
+	atualizado_em timestamptz DEFAULT now() NULL,
+	CONSTRAINT pessoas_contatos_pkey PRIMARY KEY (id_contato),
+	CONSTRAINT pessoas_contatos_tipo_valor_norm_key UNIQUE (tipo, valor_norm),
+	CONSTRAINT pessoas_contatos_id_pessoa_fkey FOREIGN KEY (id_pessoa) REFERENCES bebel.pessoas(id_pessoa) ON DELETE CASCADE
+);
+CREATE INDEX idx_contatos_tipo_norm ON bebel.pessoas_contatos USING btree (tipo, valor_norm);
+CREATE UNIQUE INDEX uq_contato_por_pessoa ON bebel.pessoas_contatos USING btree (id_pessoa, tipo, valor_norm);
