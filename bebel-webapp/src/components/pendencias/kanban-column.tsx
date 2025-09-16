@@ -65,16 +65,23 @@ export function KanbanColumn({ column, pendencias, onEditPendencia }: KanbanColu
           className="space-y-3 min-h-[200px]"
         >
           <SortableContext
-            items={pendencias.map(p => p.id_pendencia_sinalizada.toString())}
+            items={pendencias.map(p => p?.id_pendencia_sinalizada?.toString() || '')}
             strategy={verticalListSortingStrategy}
           >
-            {pendencias.map((pendencia) => (
-              <PendenciaCard
-                key={pendencia.id_pendencia_sinalizada}
-                pendencia={pendencia}
-                onEdit={onEditPendencia}
-              />
-            ))}
+            {pendencias.map((pendencia) => {
+              if (!pendencia) return null
+              
+              const pendenciaId = pendencia?.id_pendencia_sinalizada?.toString()
+              if (!pendenciaId) return null
+              
+              return (
+                <PendenciaCard
+                  key={pendenciaId}
+                  pendencia={pendencia}
+                  onEdit={onEditPendencia}
+                />
+              )
+            })}
           </SortableContext>
           
           {pendencias.length === 0 && (

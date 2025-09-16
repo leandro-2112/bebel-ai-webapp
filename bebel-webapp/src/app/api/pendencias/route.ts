@@ -28,8 +28,59 @@ interface PendenciaDB {
   consent_marketing?: boolean
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url)
+    const status = searchParams.get('status')
+    const tipo = searchParams.get('tipo')
+    const prioridade = searchParams.get('prioridade')
+    const responsavel = searchParams.get('responsavel')
+
+    // Construir a consulta SQL com filtros dinâmicos
+    let whereClauses: string[] = []
+    const queryParams: any[] = []
+    let paramIndex = 1
+    
+    console.log('Parâmetros recebidos:', { status, tipo, prioridade, responsavel })
+    
+    if (status) {
+      whereClauses.push(`p.status = $${paramIndex}`)
+      queryParams.push(status)
+      console.log(`Adicionando filtro de status: p.status = $${paramIndex}`, status)
+      paramIndex++
+    }
+
+    if (tipo) {
+      whereClauses.push(`p.tipo = $${paramIndex}`)
+      queryParams.push(tipo)
+      console.log(`Adicionando filtro de tipo: p.tipo = $${paramIndex}`, tipo)
+      paramIndex++
+    }
+
+    if (prioridade) {
+      whereClauses.push(`p.prioridade = $${paramIndex}`)
+      queryParams.push(parseInt(prioridade))
+      console.log(`Adicionando filtro de prioridade: p.prioridade = $${paramIndex}`, prioridade)
+      paramIndex++
+    }
+
+    if (responsavel) {
+      if (responsavel === 'none') {
+        whereClauses.push('p.id_responsavel IS NULL')
+        console.log('Adicionando filtro: p.id_responsavel IS NULL')
+      } else if (responsavel !== 'all') {
+        whereClauses.push(`p.id_responsavel = $${paramIndex}`)
+        const responsavelId = parseInt(responsavel)
+        queryParams.push(responsavelId)
+        console.log(`Adicionando filtro de responsável: p.id_responsavel = $${paramIndex}`, responsavelId)
+        paramIndex++
+      }
+    }
+
+    const whereClause = whereClauses.length > 0 
+      ? `WHERE ${whereClauses.join(' AND ')}` 
+      : ''
+      
     // Consulta SQL para buscar pendências com dados do responsável e da pessoa
     const sql = `
       SELECT 
@@ -57,11 +108,17 @@ export async function GET() {
       LEFT JOIN bebel.profissionais prof ON p.id_responsavel = prof.id_profissional
       LEFT JOIN bebel.conversas c ON p.id_conversa = c.id_conversa
       LEFT JOIN bebel.pessoas pes ON c.id_pessoa = pes.id_pessoa
+      ${whereClause}
       ORDER BY p.detected_at DESC
       LIMIT 50
     `
     
-    const { rows } = await query<PendenciaDB>(sql)
+    console.log('SQL gerado:', sql.replace(/\s+/g, ' ').trim())
+    console.log('Parâmetros da consulta:', queryParams)
+    
+    const { rows } = await query<PendenciaDB>(sql, queryParams)
+    
+    console.log('Resultados encontrados:', rows.length)
     
     // Transforma os dados do banco no formato esperado pelo frontend
     const pendenciasFormatadas = rows.map(pendencia => {
@@ -78,8 +135,15 @@ export async function GET() {
         default:
           kanban_status = 'A_FAZER'
       }
+      
+      console.log(`Pendência ${pendencia.id_pendencia_sinalizada}:`, {
+        status: pendencia.status,
+        prioridade: pendencia.prioridade,
+        kanban_status,
+        responsavel: pendencia.id_responsavel
+      })
 
-      return {
+      const formatted = {
         ...pendencia,
         kanban_status,
         // Dados do responsável vindos do banco
@@ -98,7 +162,7 @@ export async function GET() {
           consent_marketing: pendencia.consent_marketing || false,
         } : {
           id_pessoa: 0,
-          nome_completo: 'Cliente',
+          nome_completo: 'Cliente não identificado',
           status: 'LEAD',
           stage: 'NOVO',
           lead_score: 0,
@@ -107,13 +171,19 @@ export async function GET() {
         conversa: {
           id_conversa: pendencia.id_conversa,
           id_pessoa: pendencia.id_pessoa || 0,
-          canal: 'WHATSAPP' as const,
-          status: 'OPEN' as const,
+          canal: 'WHATSAPP',
+          status: 'OPEN',
           started_at: pendencia.detected_at,
           resumo_conversa: 'Conversa relacionada à pendência'
         }
       }
+      
+      console.log('Dados transformados:', formatted)
+      
+      return formatted
     })
+    
+    console.log('Dados transformados:', pendenciasFormatadas)
     
     return NextResponse.json({ 
       ok: true, 
