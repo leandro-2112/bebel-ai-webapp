@@ -18,11 +18,19 @@ interface PendenciaDB {
   id_responsavel?: number
   responsavel_nome?: string
   responsavel_especialidade?: string
+  
+  // Novos campos da pessoa
+  id_pessoa?: number
+  pessoa_nome?: string
+  pessoa_status?: string
+  stage?: string
+  lead_score?: number
+  consent_marketing?: boolean
 }
 
 export async function GET() {
   try {
-    // Consulta SQL para buscar pendências com dados do responsável
+    // Consulta SQL para buscar pendências com dados do responsável e da pessoa
     const sql = `
       SELECT 
         p.id_pendencia_sinalizada,
@@ -38,9 +46,17 @@ export async function GET() {
         p.resolution_note,
         p.id_responsavel,
         prof.nome_completo as responsavel_nome,
-        prof.especialidade as responsavel_especialidade
+        prof.especialidade as responsavel_especialidade,
+        pes.id_pessoa,
+        pes.nome_completo as pessoa_nome,
+        pes.status as pessoa_status,
+        pes.stage,
+        pes.lead_score,
+        pes.consent_marketing
       FROM bebel.pendencia_sinalizada p
       LEFT JOIN bebel.profissionais prof ON p.id_responsavel = prof.id_profissional
+      LEFT JOIN bebel.conversas c ON p.id_conversa = c.id_conversa
+      LEFT JOIN bebel.pessoas pes ON c.id_pessoa = pes.id_pessoa
       ORDER BY p.detected_at DESC
       LIMIT 50
     `
@@ -72,18 +88,25 @@ export async function GET() {
           nome_completo: pendencia.responsavel_nome || 'Responsável não encontrado',
           especialidade: pendencia.responsavel_especialidade || null
         } : null,
-        // Adiciona dados mock para pessoa/conversa por enquanto
-        pessoa: {
-          id_pessoa: 1,
-          nome_completo: 'Cliente do Banco',
+        // Dados da pessoa/conversa
+        pessoa: pendencia.id_pessoa ? {
+          id_pessoa: pendencia.id_pessoa,
+          nome_completo: pendencia.pessoa_nome || 'Cliente',
+          status: pendencia.pessoa_status || 'LEAD',
+          stage: pendencia.stage || 'NOVO',
+          lead_score: pendencia.lead_score || 0,
+          consent_marketing: pendencia.consent_marketing || false,
+        } : {
+          id_pessoa: 0,
+          nome_completo: 'Cliente',
           status: 'LEAD',
           stage: 'NOVO',
           lead_score: 0,
-          consent_marketing: false,
+          consent_marketing: false
         },
         conversa: {
           id_conversa: pendencia.id_conversa,
-          id_pessoa: 1,
+          id_pessoa: pendencia.id_pessoa || 0,
           canal: 'WHATSAPP' as const,
           status: 'OPEN' as const,
           started_at: pendencia.detected_at,
