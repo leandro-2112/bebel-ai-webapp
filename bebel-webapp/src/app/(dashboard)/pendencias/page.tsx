@@ -1,16 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { KanbanBoard } from "@/components/pendencias/kanban-board"
 import { PendenciaModal } from "@/components/pendencias/pendencia-modal"
 import { PendenciasFilters } from "@/components/pendencias/pendencias-filters"
-import { getPendenciasWithDetails } from "@/lib/mock-data"
 import { PendenciaWithDetails, FilterState } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 
 export default function PendenciasPage() {
-  const [pendencias, setPendencias] = useState<PendenciaWithDetails[]>(getPendenciasWithDetails())
+  const [pendencias, setPendencias] = useState<PendenciaWithDetails[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [selectedPendencia, setSelectedPendencia] = useState<PendenciaWithDetails | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [filters, setFilters] = useState<FilterState>({
@@ -21,14 +21,85 @@ export default function PendenciasPage() {
   })
   const [searchTerm, setSearchTerm] = useState("")
 
-  const handleUpdatePendencia = (id: number, updates: Partial<PendenciaWithDetails>) => {
-    setPendencias(prev => 
-      prev.map(p => 
-        p.id_pendencia_sinalizada === id 
-          ? { ...p, ...updates }
-          : p
+  // Carrega pendências da API
+  useEffect(() => {
+    const loadPendencias = async () => {
+      try {
+        setIsLoading(true)
+        const response = await fetch('/api/pendencias')
+        const data = await response.json()
+        
+        if (data.ok) {
+          setPendencias(data.data)
+        } else {
+          console.error('Erro ao carregar pendências:', data.error)
+          // Fallback para dados mock se der erro
+          const { getPendenciasWithDetails } = await import('@/lib/mock-data')
+          setPendencias(getPendenciasWithDetails())
+        }
+      } catch (error) {
+        console.error('Erro na requisição:', error)
+        // Fallback para dados mock se der erro
+        const { getPendenciasWithDetails } = await import('@/lib/mock-data')
+        setPendencias(getPendenciasWithDetails())
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadPendencias()
+  }, [])
+
+  const handleUpdatePendencia = async (id: number, updates: Partial<PendenciaWithDetails>) => {
+    try {
+      // Atualiza UI otimisticamente
+      setPendencias(prev => 
+        prev.map(p => 
+          p.id_pendencia_sinalizada === id 
+            ? { ...p, ...updates }
+            : p
+        )
       )
-    )
+
+      // Se mudou o status, atualiza no banco
+      if (updates.status) {
+        const response = await fetch('/api/pendencias', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id,
+            status: updates.status,
+            kanban_status: updates.kanban_status
+          })
+        })
+
+        const data = await response.json()
+        
+        if (!data.ok) {
+          console.error('Erro ao atualizar no banco:', data.error)
+          // Reverte a mudança otimística se falhou
+          setPendencias(prev => 
+            prev.map(p => 
+              p.id_pendencia_sinalizada === id 
+                ? { ...p, status: p.status } // Reverte para status anterior
+                : p
+            )
+          )
+        }
+      }
+    } catch (error) {
+      console.error('Erro na atualização:', error)
+      // Reverte a mudança otimística se falhou
+      setPendencias(prev => 
+        prev.map(p => 
+          p.id_pendencia_sinalizada === id 
+            ? { ...p, status: p.status } // Reverte para status anterior
+            : p
+        )
+      )
+    }
   }
 
   const handleEditPendencia = (pendencia: PendenciaWithDetails) => {
@@ -64,6 +135,26 @@ export default function PendenciasPage() {
     
     return true
   })
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Pendências</h1>
+          <Button disabled>
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Pendência
+          </Button>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Carregando pendências do banco...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-full flex flex-col">
