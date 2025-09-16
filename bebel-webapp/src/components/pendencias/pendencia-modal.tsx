@@ -32,13 +32,14 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, MessageSquare, User } from "lucide-react"
-import { PendenciaWithDetails } from "@/lib/types"
+import { PendenciaWithDetails, Profissional } from "@/lib/types"
 import { getTipoLabel, getPriorityLabel, getPriorityColor } from "@/lib/mock-data"
 
 const formSchema = z.object({
   descricao: z.string().min(1, "Descrição é obrigatória"),
   prioridade: z.number().min(1).max(5),
   status: z.enum(["SINALIZADA", "RESOLVIDA", "IGNORADA"]),
+  id_responsavel: z.number().optional(),
   resolution_note: z.string().optional(),
 })
 
@@ -50,15 +51,40 @@ interface PendenciaModalProps {
 }
 
 export function PendenciaModal({ pendencia, open, onOpenChange, onSave }: PendenciaModalProps) {
+  const [profissionais, setProfissionais] = React.useState<Profissional[]>([])
+  const [isLoadingProfissionais, setIsLoadingProfissionais] = React.useState(false)
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       descricao: "",
       prioridade: 3,
       status: "SINALIZADA",
+      id_responsavel: undefined,
       resolution_note: "",
     },
   })
+
+  // Carrega profissionais quando o modal abre
+  React.useEffect(() => {
+    if (open) {
+      const loadProfissionais = async () => {
+        try {
+          setIsLoadingProfissionais(true)
+          const response = await fetch('/api/profissionais')
+          const data = await response.json()
+          if (data.ok) {
+            setProfissionais(data.data)
+          }
+        } catch (error) {
+          console.error('Erro ao carregar profissionais:', error)
+        } finally {
+          setIsLoadingProfissionais(false)
+        }
+      }
+      loadProfissionais()
+    }
+  }, [open])
 
   // Update form when pendencia changes
   React.useEffect(() => {
@@ -67,6 +93,7 @@ export function PendenciaModal({ pendencia, open, onOpenChange, onSave }: Penden
         descricao: pendencia.descricao || "",
         prioridade: pendencia.prioridade,
         status: pendencia.status,
+        id_responsavel: pendencia.id_responsavel || undefined,
         resolution_note: pendencia.resolution_note || "",
       })
     }
@@ -79,6 +106,7 @@ export function PendenciaModal({ pendencia, open, onOpenChange, onSave }: Penden
       descricao: values.descricao,
       prioridade: values.prioridade as 1 | 2 | 3 | 4 | 5,
       status: values.status,
+      id_responsavel: values.id_responsavel || null,
       resolution_note: values.resolution_note || null,
     }
 
@@ -255,6 +283,36 @@ export function PendenciaModal({ pendencia, open, onOpenChange, onSave }: Penden
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="id_responsavel"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Responsável</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === "none" ? null : parseInt(value))}
+                      value={field.value === null ? "none" : field.value?.toString()}
+                      disabled={isLoadingProfissionais}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={isLoadingProfissionais ? "Carregando..." : "Selecione o responsável"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Sem responsável</SelectItem>
+                        {profissionais.map((prof) => (
+                          <SelectItem key={prof.id_profissional} value={prof.id_profissional.toString()}>
+                            {prof.nome_completo} {prof.especialidade && `(${prof.especialidade})`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}

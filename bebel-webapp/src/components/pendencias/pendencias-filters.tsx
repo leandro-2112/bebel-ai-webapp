@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import { Search, Filter, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -19,7 +20,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import { FilterState } from "@/lib/types"
+import { FilterState, Profissional } from "@/lib/types"
 
 interface PendenciasFiltersProps {
   filters: FilterState
@@ -34,6 +35,28 @@ export function PendenciasFilters({
   searchTerm,
   onSearchChange,
 }: PendenciasFiltersProps) {
+  const [profissionais, setProfissionais] = React.useState<Profissional[]>([])
+  const [isLoadingProfissionais, setIsLoadingProfissionais] = React.useState(false)
+
+  // Carrega profissionais quando o componente monta
+  React.useEffect(() => {
+    const loadProfissionais = async () => {
+      try {
+        setIsLoadingProfissionais(true)
+        const response = await fetch('/api/profissionais')
+        const data = await response.json()
+        if (data.ok) {
+          setProfissionais(data.data)
+        }
+      } catch (error) {
+        console.error('Erro ao carregar profissionais:', error)
+      } finally {
+        setIsLoadingProfissionais(false)
+      }
+    }
+    loadProfissionais()
+  }, [])
+
   const clearFilters = () => {
     onFiltersChange({
       status: null,
@@ -115,6 +138,27 @@ export function PendenciasFilters({
             <SelectItem value="3">Média</SelectItem>
             <SelectItem value="2">Baixa</SelectItem>
             <SelectItem value="1">Muito Baixa</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.responsavel || "all"}
+          onValueChange={(value) =>
+            onFiltersChange({ ...filters, responsavel: value === "all" ? null : value })
+          }
+          disabled={isLoadingProfissionais}
+        >
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder={isLoadingProfissionais ? "Carregando..." : "Responsável"} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="none">Sem responsável</SelectItem>
+            {profissionais.map((prof) => (
+              <SelectItem key={prof.id_profissional} value={prof.id_profissional.toString()}>
+                {prof.nome_completo}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

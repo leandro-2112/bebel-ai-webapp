@@ -61,33 +61,34 @@ export default function PendenciasPage() {
         )
       )
 
-      // Se mudou o status, atualiza no banco
-      if (updates.status) {
-        const response = await fetch('/api/pendencias', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            id,
-            status: updates.status,
-            kanban_status: updates.kanban_status
-          })
+      // Atualiza no banco com todos os campos modificados
+      const response = await fetch('/api/pendencias', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id,
+          status: updates.status,
+          descricao: updates.descricao,
+          prioridade: updates.prioridade,
+          id_responsavel: updates.id_responsavel,
+          resolution_note: updates.resolution_note
         })
+      })
 
-        const data = await response.json()
-        
-        if (!data.ok) {
-          console.error('Erro ao atualizar no banco:', data.error)
-          // Reverte a mudança otimística se falhou
-          setPendencias(prev => 
-            prev.map(p => 
-              p.id_pendencia_sinalizada === id 
-                ? { ...p, status: p.status } // Reverte para status anterior
-                : p
-            )
+      const data = await response.json()
+      
+      if (!data.ok) {
+        console.error('Erro ao atualizar no banco:', data.error)
+        // Reverte a mudança otimística se falhou
+        setPendencias(prev => 
+          prev.map(p => 
+            p.id_pendencia_sinalizada === id 
+              ? { ...p, ...updates } // Reverte para valores anteriores
+              : p
           )
-        }
+        )
       }
     } catch (error) {
       console.error('Erro na atualização:', error)
@@ -132,6 +133,17 @@ export default function PendenciasPage() {
     
     // Priority filter
     if (filters.prioridade && pendencia.prioridade !== filters.prioridade) return false
+    
+    // Responsible filter
+    if (filters.responsavel) {
+      if (filters.responsavel === "none") {
+        // Filter for pendencias without responsible
+        if (pendencia.id_responsavel !== null) return false
+      } else if (filters.responsavel !== "all") {
+        // Filter for specific responsible
+        if (pendencia.id_responsavel !== parseInt(filters.responsavel)) return false
+      }
+    }
     
     return true
   })

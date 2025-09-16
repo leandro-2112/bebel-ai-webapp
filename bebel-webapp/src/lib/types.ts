@@ -36,6 +36,12 @@ export interface Mensagem {
   created_at_ingest: string;
 }
 
+export interface Profissional {
+  id_profissional: number
+  nome_completo: string
+  especialidade?: string | null
+}
+
 export interface PendenciaSinalizada {
   id_pendencia_sinalizada: number;
   id_conversa: number;
@@ -48,6 +54,14 @@ export interface PendenciaSinalizada {
   detected_at: string;
   resolved_at: string | null;
   resolution_note: string | null;
+}
+
+export interface PendenciaWithDetails extends PendenciaSinalizada {
+  id_responsavel?: number | null
+  responsavel?: Profissional | null
+  pessoa?: Pessoa;
+  conversa?: Conversa;
+  kanban_status: 'A_FAZER' | 'FAZENDO' | 'FEITO';
 }
 
 export interface IntentLabel {

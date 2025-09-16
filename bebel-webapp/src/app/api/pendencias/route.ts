@@ -15,26 +15,33 @@ interface PendenciaDB {
   detected_at: string
   resolved_at?: string
   resolution_note?: string
+  id_responsavel?: number
+  responsavel_nome?: string
+  responsavel_especialidade?: string
 }
 
 export async function GET() {
   try {
-    // Consulta SQL para buscar pendências no schema bebel
+    // Consulta SQL para buscar pendências com dados do responsável
     const sql = `
       SELECT 
-        id_pendencia_sinalizada,
-        id_conversa,
-        id_mensagem_origem,
-        tipo,
-        descricao,
-        prioridade,
-        sla_at,
-        status,
-        detected_at,
-        resolved_at,
-        resolution_note
-      FROM bebel.pendencia_sinalizada
-      ORDER BY detected_at DESC
+        p.id_pendencia_sinalizada,
+        p.id_conversa,
+        p.id_mensagem_origem,
+        p.tipo,
+        p.descricao,
+        p.prioridade,
+        p.sla_at,
+        p.status,
+        p.detected_at,
+        p.resolved_at,
+        p.resolution_note,
+        p.id_responsavel,
+        prof.nome_completo as responsavel_nome,
+        prof.especialidade as responsavel_especialidade
+      FROM bebel.pendencia_sinalizada p
+      LEFT JOIN bebel.profissionais prof ON p.id_responsavel = prof.id_profissional
+      ORDER BY p.detected_at DESC
       LIMIT 50
     `
     
@@ -59,6 +66,12 @@ export async function GET() {
       return {
         ...pendencia,
         kanban_status,
+        // Dados do responsável vindos do banco
+        responsavel: pendencia.id_responsavel ? {
+          id_profissional: pendencia.id_responsavel,
+          nome_completo: pendencia.responsavel_nome || 'Responsável não encontrado',
+          especialidade: pendencia.responsavel_especialidade || null
+        } : null,
         // Adiciona dados mock para pessoa/conversa por enquanto
         pessoa: {
           id_pessoa: 1,
@@ -97,33 +110,81 @@ export async function GET() {
   }
 }
 
-// Endpoint para atualizar status de pendência
+// Endpoint para atualizar pendência
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { id, status, kanban_status } = body
+    const { id, status, descricao, prioridade, id_responsavel, resolution_note } = body
 
-    if (!id || !status) {
+    if (!id) {
       return NextResponse.json({
         ok: false,
-        error: 'ID e status são obrigatórios'
+        error: 'ID é obrigatório'
       }, { status: 400 })
     }
 
     // Determina resolved_at baseado no status
     const resolved_at = status === 'RESOLVIDA' ? new Date().toISOString() : null
 
-    // Atualiza no banco
+    // Monta a query dinamicamente baseado nos campos fornecidos
+    const updates = []
+    const values = []
+    let paramIndex = 1
+
+    if (status !== undefined) {
+      updates.push(`status = $${paramIndex}`)
+      values.push(status)
+      paramIndex++
+    }
+
+    if (descricao !== undefined) {
+      updates.push(`descricao = $${paramIndex}`)
+      values.push(descricao)
+      paramIndex++
+    }
+
+    if (prioridade !== undefined) {
+      updates.push(`prioridade = $${paramIndex}`)
+      values.push(prioridade)
+      paramIndex++
+    }
+
+    if (id_responsavel !== undefined) {
+      updates.push(`id_responsavel = $${paramIndex}`)
+      values.push(id_responsavel)
+      paramIndex++
+    }
+
+    if (resolution_note !== undefined) {
+      updates.push(`resolution_note = $${paramIndex}`)
+      values.push(resolution_note)
+      paramIndex++
+    }
+
+    if (resolved_at !== undefined) {
+      updates.push(`resolved_at = $${paramIndex}`)
+      values.push(resolved_at)
+      paramIndex++
+    }
+
+    if (updates.length === 0) {
+      return NextResponse.json({
+        ok: false,
+        error: 'Nenhum campo para atualizar foi fornecido'
+      }, { status: 400 })
+    }
+
+    // Adiciona o ID como último parâmetro
+    values.push(id)
+
     const sql = `
       UPDATE bebel.pendencia_sinalizada 
-      SET 
-        status = $1,
-        resolved_at = $2
-      WHERE id_pendencia_sinalizada = $3
+      SET ${updates.join(', ')}
+      WHERE id_pendencia_sinalizada = $${paramIndex}
       RETURNING *
     `
     
-    const { rows } = await query(sql, [status, resolved_at, id])
+    const { rows } = await query(sql, values)
     
     if (rows.length === 0) {
       return NextResponse.json({
