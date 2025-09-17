@@ -40,6 +40,8 @@ const columns: { id: KanbanColumn; title: string; description: string }[] = [
 ]
 
 export function KanbanBoard({ pendencias, onUpdatePendencia, onEditPendencia }: KanbanBoardProps) {
+  console.log('KanbanBoard recebeu pendencias:', pendencias)
+  
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor))
 
@@ -89,26 +91,62 @@ export function KanbanBoard({ pendencias, onUpdatePendencia, onEditPendencia }: 
   }
 
   const getPendenciasByColumn = (columnId: KanbanColumn) => {
+    console.log(`getPendenciasByColumn chamado para coluna: ${columnId}`)
+    
     if (!pendencias || !Array.isArray(pendencias)) {
+      console.error('pendencias não é um array:', pendencias)
       return []
     }
     
     // Garante que kanban_status está definido e é uma string
-    return pendencias.filter(p => {
-      if (!p) return false
+    const filtered = pendencias.filter(p => {
+      if (!p) {
+        console.warn('Item nulo encontrado em pendencias')
+        return false
+      }
       
       // Garante que o ID da pendência é uma string para comparação
       const pendenciaId = p.id_pendencia_sinalizada?.toString()
       if (!pendenciaId) return false
       
-      // Garante que kanban_status é uma string e usa valor padrão se não existir
-      const status = (p.kanban_status || 'A_FAZER').toUpperCase() as KanbanColumn
+      // Normaliza o status para garantir comparação consistente
+      const status = (p.kanban_status || 'A_FAZER').toString().toUpperCase().trim() as KanbanColumn
+      const targetColumn = columnId.toString().toUpperCase().trim()
       
-      return status === columnId
+      console.log(`Verificando pendência ${pendenciaId} - status: ${status}, coluna: ${targetColumn}`)
+      
+      const matches = status === targetColumn
+      console.log(`Pendência ${pendenciaId} ${matches ? 'corresponde' : 'não corresponde'} à coluna ${targetColumn}`)
+      
+      return matches
     })
+    
+    console.log(`Total de ${filtered.length} pendências encontradas para a coluna ${columnId}`)
+    return filtered
   }
 
   const activePendencia = activeId ? pendencias.find(p => p.id_pendencia_sinalizada.toString() === activeId.toString()) : null
+
+  // Verificar se há dados para exibir
+  const hasData = pendencias && pendencias.length > 0
+  console.log('Tem dados para exibir?', hasData)
+  
+  if (!hasData) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Nenhuma pendência encontrada</p>
+          <p className="text-sm text-muted-foreground">Verifique os filtros ou tente novamente mais tarde.</p>
+          <pre className="mt-4 rounded bg-muted p-4 text-left text-xs">
+            {JSON.stringify({
+              totalPendencias: pendencias?.length || 0,
+              sample: pendencias?.[0] || 'Nenhuma pendência disponível'
+            }, null, 2)}
+          </pre>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <DndContext
@@ -116,31 +154,27 @@ export function KanbanBoard({ pendencias, onUpdatePendencia, onEditPendencia }: 
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {columns.map((column) => {
-          const columnPendencias = getPendenciasByColumn(column.id)
-          return (
-            <KanbanColumnComponent
-              key={column.id}
-              column={column}
-              pendencias={columnPendencias}
-              onEditPendencia={onEditPendencia}
-            />
-          )
-        })}
+      <div className="flex h-full gap-4 overflow-x-auto p-4">
+        {columns.map((column) => (
+          <KanbanColumnComponent
+            key={column.id}
+            column={column}
+            pendencias={getPendenciasByColumn(column.id)}
+            onEditPendencia={onEditPendencia}
+          />
+        ))}
+        <DragOverlay>
+          {activePendencia && (
+            <div className="w-80">
+              <PendenciaCard
+                pendencia={activePendencia}
+                onEdit={onEditPendencia}
+                isDragging
+              />
+            </div>
+          )}
+        </DragOverlay>
       </div>
-
-      <DragOverlay>
-        {activePendencia ? (
-          <div className="w-80">
-            <PendenciaCard
-              pendencia={activePendencia}
-              onEdit={onEditPendencia}
-              isDragging
-            />
-          </div>
-        ) : null}
-      </DragOverlay>
     </DndContext>
   )
 }

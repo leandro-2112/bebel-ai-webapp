@@ -1,16 +1,35 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useCallback } from "react"
 import { KanbanBoard } from "@/components/pendencias/kanban-board"
 import { PendenciaModal } from "@/components/pendencias/pendencia-modal"
 import { PendenciasFilters } from "@/components/pendencias/pendencias-filters"
 import { PendenciaWithDetails, FilterState } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
+import { usePendencias, useUpdatePendencia } from "@/hooks/usePendencias"
+import { useToast } from "@/components/ui/use-toast"
+
+// Função para construir a query string de filtros
+const buildQueryString = (filters: FilterState) => {
+  const params = new URLSearchParams()
+  
+  // Apenas adiciona os filtros que têm valor
+  if (filters.status) params.append('status', filters.status)
+  if (filters.tipo) params.append('tipo', filters.tipo)
+  if (filters.prioridade) params.append('prioridade', filters.prioridade.toString())
+  
+  // Tratamento especial para o filtro de responsável
+  if (filters.responsavel === 'none') {
+    params.append('responsavel', 'none')
+  } else if (filters.responsavel && filters.responsavel !== 'all') {
+    params.append('responsavel', filters.responsavel)
+  }
+  
+  return params.toString()
+}
 
 export default function PendenciasPage() {
-  const [pendencias, setPendencias] = useState<PendenciaWithDetails[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [selectedPendencia, setSelectedPendencia] = useState<PendenciaWithDetails | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [filters, setFilters] = useState<FilterState>({
@@ -20,111 +39,50 @@ export default function PendenciasPage() {
     responsavel: null,
   })
   const [searchTerm, setSearchTerm] = useState("")
+  const { toast } = useToast()
+  
+  // Construir a query string baseada nos filtros
+  const queryString = buildQueryString(filters)
+  console.log('Query string construída:', queryString);
+  
+  const { 
+    pendencias = [], 
+    isLoading, 
+    isError, 
+    error,
+    mutate 
+  } = usePendencias(queryString)
+  
+  console.log('Dados retornados pelo hook usePendencias:', {
+    pendenciasCount: pendencias.length,
+    isLoading,
+    isError,
+    error: error?.message
+  });
+  
+  const { updatePendencia } = useUpdatePendencia()
 
-    // Carrega pendências da API
-  useEffect(() => {
-    const loadPendencias = async () => {
-      try {
-        setIsLoading(true)
-        
-        // Construir query string com os filtros
-        const params = new URLSearchParams()
-        
-        // Apenas adiciona os filtros que têm valor
-        if (filters.status) params.append('status', filters.status)
-        if (filters.tipo) params.append('tipo', filters.tipo)
-        if (filters.prioridade) params.append('prioridade', filters.prioridade.toString())
-        
-        // Tratamento especial para o filtro de responsável
-        if (filters.responsavel === 'none') {
-          // Filtra por pendências sem responsável
-          params.append('responsavel', 'none')
-        } else if (filters.responsavel && filters.responsavel !== 'all') {
-          // Filtra por um responsável específico
-          params.append('responsavel', filters.responsavel)
-        }
-        
-        const queryString = params.toString()
-        const url = `/api/pendencias${queryString ? `?${queryString}` : ''}`
-        
-        const response = await fetch(url)
-        const data = await response.json()
-        
-        if (data.ok) {
-          // Garante que todas as pendências tenham o campo kanban_status
-          const pendenciasComStatus = data.data.map((p: any) => ({
-            ...p,
-            kanban_status: p.kanban_status || 'A_FAZER' // Valor padrão se não existir
-          }))
-          
-          setPendencias(pendenciasComStatus)
-        } else {
-          // Fallback para dados mock se der erro
-          const { getPendenciasWithDetails } = await import('@/lib/mock-data')
-          setPendencias(getPendenciasWithDetails())
-        }
-      } catch (error) {
-        // Fallback para dados mock se der erro
-        const { getPendenciasWithDetails } = await import('@/lib/mock-data')
-        setPendencias(getPendenciasWithDetails())
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadPendencias()
-  }, [filters]) // Recarrega quando os filtros mudarem
+  // Função para lidar com erros
+  const handleError = (error: Error) => {
+    console.error('Erro:', error)
+    toast({
+      title: 'Erro',
+      description: 'Ocorreu um erro ao processar a requisição.',
+      variant: 'destructive',
+    })
+  }
 
   const handleUpdatePendencia = async (id: number, updates: Partial<PendenciaWithDetails>) => {
     try {
-      // Atualiza UI otimisticamente
-      setPendencias(prev => 
-        prev.map(p => 
-          p.id_pendencia_sinalizada === id 
-            ? { ...p, ...updates }
-            : p
-        )
-      )
-
-      // Atualiza no banco com todos os campos modificados
-      const response = await fetch('/api/pendencias', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id,
-          status: updates.status,
-          descricao: updates.descricao,
-          prioridade: updates.prioridade,
-          id_responsavel: updates.id_responsavel,
-          resolution_note: updates.resolution_note
-        })
-      })
-
-      const data = await response.json()
+      // Atualização otimística com SWR
+      await updatePendencia(id, updates)
       
-      if (!data.ok) {
-        console.error('Erro ao atualizar no banco:', data.error)
-        // Reverte a mudança otimística se falhou
-        setPendencias(prev => 
-          prev.map(p => 
-            p.id_pendencia_sinalizada === id 
-              ? { ...p, ...updates } // Reverte para valores anteriores
-              : p
-          )
-        )
-      }
+      toast({
+        title: 'Sucesso',
+        description: 'Pendência atualizada com sucesso!',
+      })
     } catch (error) {
-      console.error('Erro na atualização:', error)
-      // Reverte a mudança otimística se falhou
-      setPendencias(prev => 
-        prev.map(p => 
-          p.id_pendencia_sinalizada === id 
-            ? { ...p, status: p.status } // Reverte para status anterior
-            : p
-        )
-      )
+      handleError(error as Error)
     }
   }
 
@@ -139,24 +97,41 @@ export default function PendenciasPage() {
   }
 
   // A busca por termo ainda é feita no frontend por ser mais simples e não exigir uma nova requisição
+  console.log('Antes de filtrar - Total de pendencias:', pendencias.length);
+  console.log('Termo de busca:', searchTerm);
+  
   const filteredPendencias = searchTerm
     ? pendencias.filter(pendencia => {
-        if (!pendencia) return false;
+        if (!pendencia) {
+          console.warn('Pendência nula encontrada no array');
+          return false;
+        }
         
         const searchLower = searchTerm.toLowerCase();
         const descricao = pendencia.descricao?.toLowerCase() || '';
         const id = pendencia.id_pendencia_sinalizada?.toString() || '';
         const nomePessoa = pendencia.pessoa?.nome_completo?.toLowerCase() || '';
+        
+        console.log('Filtrando pendência:', {
+          id: pendencia.id_pendencia_sinalizada,
+          descricao: pendencia.descricao,
+          nomePessoa: pendencia.pessoa?.nome_completo
+        });
 
-        return (
+        const matches = (
           descricao.includes(searchLower) ||
           id.includes(searchTerm) ||
           nomePessoa.includes(searchLower)
         );
+        
+        console.log(`Pendência ${pendencia.id_pendencia_sinalizada} ${matches ? 'corresponde' : 'não corresponde'} ao termo de busca`);
+        return matches;
       })
     : pendencias;
+    
+  console.log('Depois de filtrar - Total de pendencias:', filteredPendencias.length);
 
-  if (isLoading) {
+  if (isLoading && !pendencias.length) {
     return (
       <div className="h-full flex flex-col">
         <div className="flex items-center justify-between mb-6">
@@ -170,6 +145,34 @@ export default function PendenciasPage() {
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
             <p className="text-muted-foreground">Carregando pendências do banco...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  if (isError) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Pendências</h1>
+          <Button 
+            onClick={() => mutate()}
+            variant="outline"
+          >
+            Tentar novamente
+          </Button>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-destructive">Erro ao carregar as pendências</p>
+            <Button 
+              onClick={() => mutate()}
+              variant="outline"
+              className="mt-4"
+            >
+              Tentar novamente
+            </Button>
           </div>
         </div>
       </div>
@@ -212,23 +215,33 @@ export default function PendenciasPage() {
         }}
         onSave={selectedPendencia ? 
           (id, updates) => handleUpdatePendencia(id, updates) :
-          (id, updates) => {
-            const newPendencia: PendenciaWithDetails = {
-              id_pendencia_sinalizada: Math.max(...pendencias.map(p => p.id_pendencia_sinalizada)) + 1,
-              id_conversa: 1,
-              id_mensagem_origem: null,
-              tipo: 'INFORMACAO',
-              descricao: '',
-              prioridade: 1,
-              sla_at: null,
-              status: 'SINALIZADA',
-              detected_at: new Date().toISOString(),
-              resolved_at: null,
-              resolution_note: null,
-              kanban_status: 'A_FAZER',
-              ...updates,
+          async (id, updates) => {
+            try {
+              const response = await fetch('/api/pendencias', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+              })
+              
+              if (!response.ok) throw new Error('Erro ao criar pendência')
+              
+              const newPendencia = await response.json()
+              
+              // Atualiza o cache do SWR com a nova pendência
+              mutate((current: PendenciaWithDetails[] | undefined) => 
+                current ? [...current, newPendencia] : [newPendencia]
+              )
+              
+              toast({
+                title: 'Sucesso',
+                description: 'Pendência criada com sucesso!',
+              })
+              
+              return true
+            } catch (error) {
+              handleError(error as Error)
+              return false
             }
-            setPendencias(prev => [...prev, newPendencia])
           }
         }
       />

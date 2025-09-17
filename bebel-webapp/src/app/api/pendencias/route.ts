@@ -1,6 +1,12 @@
 // Endpoint para buscar pendências do banco
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/db'
+import { 
+  PendenciaWithDetails, 
+  Pessoa, 
+  Conversa, 
+  Profissional 
+} from '@/lib/types'
 
 // Tipos para as pendências vindas do banco
 interface PendenciaDB {
@@ -29,12 +35,15 @@ interface PendenciaDB {
 }
 
 export async function GET(request: Request) {
+  console.log('=== Iniciando requisição GET para /api/pendencias ===');
   try {
-    const { searchParams } = new URL(request.url)
-    const status = searchParams.get('status')
-    const tipo = searchParams.get('tipo')
-    const prioridade = searchParams.get('prioridade')
-    const responsavel = searchParams.get('responsavel')
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get('status');
+    const tipo = searchParams.get('tipo');
+    const prioridade = searchParams.get('prioridade');
+    const responsavel = searchParams.get('responsavel');
+    
+    console.log('Parâmetros da URL:', { status, tipo, prioridade, responsavel });
 
     // Construir a consulta SQL com filtros dinâmicos
     let whereClauses: string[] = []
@@ -109,9 +118,23 @@ export async function GET(request: Request) {
     console.log('SQL gerado:', sql.replace(/\s+/g, ' ').trim())
     console.log('Parâmetros da consulta:', queryParams)
     
-    const { rows } = await query<PendenciaDB>(sql, queryParams)
+    console.log('Executando consulta SQL...');
+    const result = await query<PendenciaDB>(sql, queryParams);
     
-    console.log('Resultados encontrados:', rows.length)
+    if (!result) {
+      console.error('Erro: Resultado da consulta é undefined');
+      return NextResponse.json({ error: 'Erro ao executar a consulta' }, { status: 500 });
+    }
+    
+    const { rows } = result;
+    console.log('Resultados encontrados:', rows.length);
+    
+    if (rows.length === 0) {
+      console.log('Nenhuma pendência encontrada com os filtros atuais');
+      // Vamos executar uma consulta sem filtros para ver se existem pendências
+      const allRows = await query<PendenciaDB>('SELECT * FROM bebel.pendencia_sinalizada LIMIT 1');
+      console.log('Total de pendências na tabela (amostra de 1):', allRows?.rows.length || 0);
+    }
     
     // Transforma os dados do banco no formato esperado pelo frontend
     const pendenciasFormatadas = rows.map(pendencia => {
@@ -136,44 +159,79 @@ export async function GET(request: Request) {
         responsavel: pendencia.id_responsavel
       })
 
-      const formatted = {
+      // Criar objeto da pessoa com todos os campos obrigatórios
+      const pessoa: Pessoa = pendencia.id_pessoa ? {
+        id_pessoa: pendencia.id_pessoa,
+        nome_completo: pendencia.pessoa_nome || 'Cliente',
+        status: (pendencia.pessoa_status as 'LEAD' | 'PACIENTE') || 'LEAD',
+        stage: pendencia.stage as 'NOVO' | 'QUALIFICADO' | 'CONVERTIDO' || 'NOVO',
+        lead_score: pendencia.lead_score || 0,
+        consent_marketing: pendencia.consent_marketing || false,
+        // Campos obrigatórios com valores padrão
+        data_nascimento: null,
+        cpf: null,
+        origem: null
+      } : {
+        id_pessoa: 0,
+        nome_completo: 'Cliente não identificado',
+        status: 'LEAD',
+        stage: 'NOVO',
+        lead_score: 0,
+        consent_marketing: false,
+        data_nascimento: null,
+        cpf: null,
+        origem: null
+      };
+
+      // Criar objeto da conversa com todos os campos obrigatórios
+      const conversa: Conversa = {
+        id_conversa: pendencia.id_conversa,
+        id_pessoa: pendencia.id_pessoa || 0,
+        canal: 'WHATSAPP',
+        status: 'OPEN',
+        started_at: pendencia.detected_at,
+        resumo_conversa: 'Conversa relacionada à pendência',
+        // Campos obrigatórios com valores padrão
+        ended_at: null,
+        last_message_at: null,
+        topic: null
+      };
+
+      // Criar objeto do responsável (pode ser null)
+      const responsavel = pendencia.id_responsavel ? {
+        id_profissional: pendencia.id_responsavel,
+        nome_completo: pendencia.responsavel_nome || 'Responsável não encontrado',
+        especialidade: pendencia.responsavel_especialidade || null
+      } : null;
+
+      // Garantir que a prioridade esteja dentro do intervalo válido (1-5)
+      const prioridadeValida = pendencia.prioridade >= 1 && pendencia.prioridade <= 5 
+        ? pendencia.prioridade as 1 | 2 | 3 | 4 | 5 
+        : 3; // Valor padrão se estiver fora do intervalo
+      
+      // Montar o objeto final com todos os campos necessários
+      const formatted: PendenciaWithDetails = {
         ...pendencia,
+        // Garantir que todos os campos opcionais tenham valores padrão
+        id_mensagem_origem: pendencia.id_mensagem_origem || null,
+        descricao: pendencia.descricao || null,
+        sla_at: pendencia.sla_at || null,
+        resolved_at: pendencia.resolved_at || null,
+        resolution_note: pendencia.resolution_note || null,
+        // Garantir que a prioridade esteja no formato correto
+        prioridade: prioridadeValida,
+        // Campos necessários para o Kanban
         kanban_status,
-        // Dados do responsável vindos do banco
-        responsavel: pendencia.id_responsavel ? {
-          id_profissional: pendencia.id_responsavel,
-          nome_completo: pendencia.responsavel_nome || 'Responsável não encontrado',
-          especialidade: pendencia.responsavel_especialidade || null
-        } : null,
-        // Dados da pessoa/conversa
-        pessoa: pendencia.id_pessoa ? {
-          id_pessoa: pendencia.id_pessoa,
-          nome_completo: pendencia.pessoa_nome || 'Cliente',
-          status: pendencia.pessoa_status || 'LEAD',
-          stage: pendencia.stage || 'NOVO',
-          lead_score: pendencia.lead_score || 0,
-          consent_marketing: pendencia.consent_marketing || false,
-        } : {
-          id_pessoa: 0,
-          nome_completo: 'Cliente não identificado',
-          status: 'LEAD',
-          stage: 'NOVO',
-          lead_score: 0,
-          consent_marketing: false
-        },
-        conversa: {
-          id_conversa: pendencia.id_conversa,
-          id_pessoa: pendencia.id_pessoa || 0,
-          canal: 'WHATSAPP',
-          status: 'OPEN',
-          started_at: pendencia.detected_at,
-          resumo_conversa: 'Conversa relacionada à pendência'
-        }
-      }
+        // Relacionamentos
+        responsavel,
+        pessoa,
+        conversa,
+        // Garantir que o tipo seja uma string não nula
+        tipo: pendencia.tipo || 'OUTRO'
+      };
       
-      console.log('Dados transformados:', formatted)
-      
-      return formatted
+      console.log('Dados transformados:', formatted);
+      return formatted;
     })
     
     console.log('Dados transformados:', pendenciasFormatadas)
@@ -198,23 +256,27 @@ export async function GET(request: Request) {
 
 // Endpoint para atualizar pendência
 export async function POST(request: Request) {
+  console.log('=== Iniciando requisição POST para /api/pendencias ===');
   try {
     const body = await request.json()
+    console.log('Dados recebidos:', body);
+    
     const { id, status, descricao, prioridade, id_responsavel, resolution_note } = body
 
     if (!id) {
-      return NextResponse.json({
-        ok: false,
-        error: 'ID é obrigatório'
-      }, { status: 400 })
+      console.error('Erro: ID não fornecido');
+      return NextResponse.json(
+        { ok: false, error: 'ID é obrigatório' },
+        { status: 400 }
+      )
     }
 
     // Determina resolved_at baseado no status
     const resolved_at = status === 'RESOLVIDA' ? new Date().toISOString() : null
 
     // Monta a query dinamicamente baseado nos campos fornecidos
-    const updates = []
-    const values = []
+    const updates: string[] = []
+    const values: any[] = []
     let paramIndex = 1
 
     if (status !== undefined) {
@@ -270,25 +332,44 @@ export async function POST(request: Request) {
       RETURNING *
     `
     
-    const { rows } = await query(sql, values)
+    console.log('Executando atualização no banco de dados...');
+    console.log('SQL:', sql);
+    console.log('Valores:', values);
+    
+    const result = await query(sql, values);
+    
+    if (!result) {
+      console.error('Erro: Nenhum resultado retornado da consulta');
+      return NextResponse.json(
+        { ok: false, error: 'Erro ao executar a atualização' },
+        { status: 500 }
+      );
+    }
+    
+    const { rows } = result;
     
     if (rows.length === 0) {
-      return NextResponse.json({
-        ok: false,
-        error: 'Pendência não encontrada'
-      }, { status: 404 })
+      console.error('Erro: Nenhuma linha afetada pela atualização');
+      return NextResponse.json(
+        { ok: false, error: 'Pendência não encontrada' },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json({ 
-      ok: true, 
-      message: 'Status atualizado com sucesso',
-      data: rows[0]
-    })
-  } catch (err: any) {
-    console.error('Erro ao atualizar pendência:', err)
+    console.log('Pendência atualizada com sucesso:', rows[0]);
     return NextResponse.json({
-      ok: false,
-      error: err?.message || String(err)
-    }, { status: 500 })
+      ok: true,
+      data: rows[0]
+    });
+  } catch (error) {
+    console.error('Erro ao processar requisição POST:', error);
+    return NextResponse.json(
+      { 
+        ok: false, 
+        error: 'Erro interno do servidor',
+        details: error instanceof Error ? error.message : 'Erro desconhecido'
+      },
+      { status: 500 }
+    );
   }
 }
