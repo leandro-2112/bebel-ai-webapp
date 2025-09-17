@@ -78,12 +78,12 @@ export function PendenciaCard({ pendencia, onEdit, isDragging = false }: Pendenc
           </div>
   
           <div>
-            <p className="text-sm font-medium line-clamp-2 text-foreground mb-2 p-2">
+            <p className="text-sm font-normal line-clamp-3 text-foreground mb-2 p-2">
               {pendencia.descricao || 'Sem descrição'}
             </p>
   
             {pendencia.pessoa && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground p-0">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground p-1">
                 <User className="h-3 w-3 flex-shrink-0" />
                 <span className="truncate">{pendencia.pessoa.nome_completo || 'Sem nome'}</span>
               </div>

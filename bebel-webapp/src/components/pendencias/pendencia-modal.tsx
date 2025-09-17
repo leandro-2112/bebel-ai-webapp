@@ -143,16 +143,41 @@ export function PendenciaModal({ pendencia, open, onOpenChange, onSave }: Penden
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>Detalhes da Pendência</DialogTitle>
-          <DialogDescription>
-            Edite os detalhes da pendência e atualize seu status.
-          </DialogDescription>
-        </DialogHeader>
-
+        <DialogTitle className="sr-only">Detalhes da Pendência</DialogTitle>
         <div className="space-y-4">
+          {/* Top Bar with Person and Conversation Button */}
+          <div className="flex items-center justify-between">
+            {/* Person Info */}
+            {pendencia.pessoa && (
+              <div className="flex items-center gap-2 p-2 rounded-lg">
+                <User className="h-10 w-10 text-gray-500" />
+                <div>
+                  <p className="font-medium">{pendencia.pessoa.nome_completo || 'Sem nome'}</p>
+                  <p className="text-sm text-gray-500">
+                    {pendencia.pessoa.status} • Score: {pendencia.pessoa.lead_score}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Conversation Button */}
+            {pendencia.conversa && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground hover:text-foreground flex-shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  console.log('Navigate to conversation:', pendencia.conversa?.id_conversa)
+                }}
+              >
+                <MessageSquare className="h-3 w-3 mr-1.5" /> Ver conversa
+              </Button>
+            )}
+          </div>
+
           {/* Pendencia Info */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 pt-2">
             <Badge variant="outline">
               {getTipoLabel(pendencia.tipo)}
             </Badge>
@@ -163,35 +188,6 @@ export function PendenciaModal({ pendencia, open, onOpenChange, onSave }: Penden
               {getPriorityLabel(pendencia.prioridade)}
             </Badge>
           </div>
-
-          {/* Patient Info */}
-          {pendencia.pessoa && (
-            <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
-              <User className="h-4 w-4 text-gray-500" />
-              <div>
-                <p className="font-medium">{pendencia.pessoa.nome_completo || 'Sem nome'}</p>
-                <p className="text-sm text-gray-500">
-                  {pendencia.pessoa.status} • Score: {pendencia.pessoa.lead_score}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Conversation Link */}
-          {pendencia.conversa && (
-            <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
-              <MessageSquare className="h-4 w-4 text-blue-500" />
-              <div className="flex-1">
-                <p className="font-medium">Conversa Associada</p>
-                <p className="text-sm text-gray-500">
-                  {pendencia.conversa.resumo_conversa || 'Sem resumo disponível'}
-                </p>
-              </div>
-              <Button variant="outline" size="sm">
-                Ver Conversa
-              </Button>
-            </div>
-          )}
 
           {/* Timestamps */}
           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -234,7 +230,7 @@ export function PendenciaModal({ pendencia, open, onOpenChange, onSave }: Penden
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <FormField
                   control={form.control}
                   name="prioridade"
@@ -282,7 +278,7 @@ export function PendenciaModal({ pendencia, open, onOpenChange, onSave }: Penden
                     </FormItem>
                   )}
                 />
-              </div>
+              
 
               <FormField
                 control={form.control}
@@ -313,6 +309,7 @@ export function PendenciaModal({ pendencia, open, onOpenChange, onSave }: Penden
                   </FormItem>
                 )}
               />
+            </div>
 
               <FormField
                 control={form.control}
