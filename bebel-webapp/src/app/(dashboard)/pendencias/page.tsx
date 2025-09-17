@@ -21,7 +21,7 @@ export default function PendenciasPage() {
   })
   const [searchTerm, setSearchTerm] = useState("")
 
-  // Carrega pendências da API
+    // Carrega pendências da API
   useEffect(() => {
     const loadPendencias = async () => {
       try {
@@ -30,10 +30,19 @@ export default function PendenciasPage() {
         // Construir query string com os filtros
         const params = new URLSearchParams()
         
+        // Apenas adiciona os filtros que têm valor
         if (filters.status) params.append('status', filters.status)
         if (filters.tipo) params.append('tipo', filters.tipo)
         if (filters.prioridade) params.append('prioridade', filters.prioridade.toString())
-        if (filters.responsavel) params.append('responsavel', filters.responsavel)
+        
+        // Tratamento especial para o filtro de responsável
+        if (filters.responsavel === 'none') {
+          // Filtra por pendências sem responsável
+          params.append('responsavel', 'none')
+        } else if (filters.responsavel && filters.responsavel !== 'all') {
+          // Filtra por um responsável específico
+          params.append('responsavel', filters.responsavel)
+        }
         
         const queryString = params.toString()
         const url = `/api/pendencias${queryString ? `?${queryString}` : ''}`
@@ -42,31 +51,19 @@ export default function PendenciasPage() {
         const data = await response.json()
         
         if (data.ok) {
-          console.log('Dados recebidos da API:', data.data)
-          console.log('Total de pendências recebidas:', data.data.length)
+          // Garante que todas as pendências tenham o campo kanban_status
+          const pendenciasComStatus = data.data.map((p: any) => ({
+            ...p,
+            kanban_status: p.kanban_status || 'A_FAZER' // Valor padrão se não existir
+          }))
           
-          // Verifica se as pendências têm o campo kanban_status
-          const pendenciasComStatus = data.data.map((p: any) => {
-            if (!p.kanban_status) {
-              console.warn('Pendência sem kanban_status:', p.id_pendencia_sinalizada)
-              return {
-                ...p,
-                kanban_status: 'A_FAZER' // Valor padrão
-              }
-            }
-            return p
-          })
-          
-          console.log('Pendências após validação:', pendenciasComStatus)
           setPendencias(pendenciasComStatus)
         } else {
-          console.error('Erro ao carregar pendências:', data.error)
           // Fallback para dados mock se der erro
           const { getPendenciasWithDetails } = await import('@/lib/mock-data')
           setPendencias(getPendenciasWithDetails())
         }
       } catch (error) {
-        console.error('Erro na requisição:', error)
         // Fallback para dados mock se der erro
         const { getPendenciasWithDetails } = await import('@/lib/mock-data')
         setPendencias(getPendenciasWithDetails())
@@ -76,7 +73,7 @@ export default function PendenciasPage() {
     }
 
     loadPendencias()
-  }, [filters])
+  }, [filters]) // Recarrega quando os filtros mudarem
 
   const handleUpdatePendencia = async (id: number, updates: Partial<PendenciaWithDetails>) => {
     try {
@@ -141,84 +138,23 @@ export default function PendenciasPage() {
     setIsModalOpen(true)
   }
 
-  // Aplicar filtros
-  const filteredPendencias = pendencias.filter(pendencia => {
-    if (!pendencia) return false;
-    
-    // Log para depuração
-    console.log('Avaliando pendência:', {
-      id: pendencia.id_pendencia_sinalizada,
-      status: pendencia.status,
-      kanban_status: pendencia.kanban_status,
-      responsavel: pendencia.id_responsavel,
-      filtros: filters
-    });
-
-    // Filtro de busca
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      const descricao = pendencia.descricao?.toLowerCase() || '';
-      const id = pendencia.id_pendencia_sinalizada?.toString() || '';
-      const nomePessoa = pendencia.pessoa?.nome_completo?.toLowerCase() || '';
-      
-      const matchesSearch = 
-        descricao.includes(searchLower) ||
-        id.includes(searchTerm) ||
-        nomePessoa.includes(searchLower);
-      
-      if (!matchesSearch) {
-        console.log('Filtrado por termo de busca:', pendencia.id_pendencia_sinalizada);
-        return false;
-      }
-    }
-
-    // Filtro de status
-    if (filters.status && pendencia.status !== filters.status) {
-      console.log('Filtrado por status:', pendencia.id_pendencia_sinalizada);
-      return false;
-    }
-
-    // Filtro de tipo
-    if (filters.tipo && pendencia.tipo !== filters.tipo) {
-      console.log('Filtrado por tipo:', pendencia.id_pendencia_sinalizada);
-      return false;
-    }
-
-    // Filtro de prioridade
-    if (filters.prioridade && pendencia.prioridade !== filters.prioridade) {
-      console.log('Filtrado por prioridade:', pendencia.id_pendencia_sinalizada);
-      return false;
-    }
-
-    // Filtro de responsável
-    if (filters.responsavel) {
-      if (filters.responsavel === "none") {
-        // Filtra pendências sem responsável
-        if (pendencia.id_responsavel !== null) {
-          console.log('Filtrado por sem responsável:', pendencia.id_pendencia_sinalizada);
-          return false;
-        }
-      } else if (filters.responsavel !== "all") {
-        // Converte ambos para string para garantir a comparação correta
-        const pendenciaResponsavel = pendencia.id_responsavel?.toString() || '';
-        const filtroResponsavel = filters.responsavel.toString();
+  // A busca por termo ainda é feita no frontend por ser mais simples e não exigir uma nova requisição
+  const filteredPendencias = searchTerm
+    ? pendencias.filter(pendencia => {
+        if (!pendencia) return false;
         
-        if (pendenciaResponsavel !== filtroResponsavel) {
-          console.log('Filtrado por responsável:', {
-            id: pendencia.id_pendencia_sinalizada,
-            pendenciaResponsavel,
-            filtroResponsavel,
-            tipoPendencia: typeof pendenciaResponsavel,
-            tipoFiltro: typeof filtroResponsavel
-          });
-          return false;
-        }
-      }
-    }
-    
-    console.log('Pendência incluída:', pendencia.id_pendencia_sinalizada);
-    return true;
-  })
+        const searchLower = searchTerm.toLowerCase();
+        const descricao = pendencia.descricao?.toLowerCase() || '';
+        const id = pendencia.id_pendencia_sinalizada?.toString() || '';
+        const nomePessoa = pendencia.pessoa?.nome_completo?.toLowerCase() || '';
+
+        return (
+          descricao.includes(searchLower) ||
+          id.includes(searchTerm) ||
+          nomePessoa.includes(searchLower)
+        );
+      })
+    : pendencias;
 
   if (isLoading) {
     return (
@@ -260,18 +196,6 @@ export default function PendenciasPage() {
       </div>
 
       <div className="flex-1 min-h-0">
-        {(() => {
-          console.log('Pendências filtradas antes de passar para o KanbanBoard:', {
-            count: filteredPendencias.length,
-            pendencias: filteredPendencias.map(p => ({
-              id: p?.id_pendencia_sinalizada,
-              status: p?.status,
-              kanban_status: p?.kanban_status,
-              responsavel: p?.id_responsavel
-            }))
-          })
-          return null
-        })()}
         <KanbanBoard
           pendencias={filteredPendencias}
           onUpdatePendencia={handleUpdatePendencia}

@@ -41,38 +41,31 @@ export async function GET(request: Request) {
     const queryParams: any[] = []
     let paramIndex = 1
     
-    console.log('Parâmetros recebidos:', { status, tipo, prioridade, responsavel })
-    
     if (status) {
       whereClauses.push(`p.status = $${paramIndex}`)
       queryParams.push(status)
-      console.log(`Adicionando filtro de status: p.status = $${paramIndex}`, status)
       paramIndex++
     }
 
     if (tipo) {
       whereClauses.push(`p.tipo = $${paramIndex}`)
       queryParams.push(tipo)
-      console.log(`Adicionando filtro de tipo: p.tipo = $${paramIndex}`, tipo)
       paramIndex++
     }
 
     if (prioridade) {
       whereClauses.push(`p.prioridade = $${paramIndex}`)
       queryParams.push(parseInt(prioridade))
-      console.log(`Adicionando filtro de prioridade: p.prioridade = $${paramIndex}`, prioridade)
       paramIndex++
     }
 
     if (responsavel) {
       if (responsavel === 'none') {
         whereClauses.push('p.id_responsavel IS NULL')
-        console.log('Adicionando filtro: p.id_responsavel IS NULL')
       } else if (responsavel !== 'all') {
         whereClauses.push(`p.id_responsavel = $${paramIndex}`)
         const responsavelId = parseInt(responsavel)
         queryParams.push(responsavelId)
-        console.log(`Adicionando filtro de responsável: p.id_responsavel = $${paramIndex}`, responsavelId)
         paramIndex++
       }
     }

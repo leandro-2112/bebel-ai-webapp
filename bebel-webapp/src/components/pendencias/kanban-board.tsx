@@ -40,15 +40,6 @@ const columns: { id: KanbanColumn; title: string; description: string }[] = [
 ]
 
 export function KanbanBoard({ pendencias, onUpdatePendencia, onEditPendencia }: KanbanBoardProps) {
-  console.log('KanbanBoard - Props recebidas:', { 
-    totalPendencias: pendencias?.length,
-    pendencias: pendencias?.map(p => ({
-      id: p?.id_pendencia_sinalizada,
-      status: p?.status,
-      kanban_status: p?.kanban_status,
-      responsavel: p?.id_responsavel
-    }))
-  })
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor))
 
@@ -99,14 +90,11 @@ export function KanbanBoard({ pendencias, onUpdatePendencia, onEditPendencia }: 
 
   const getPendenciasByColumn = (columnId: KanbanColumn) => {
     if (!pendencias || !Array.isArray(pendencias)) {
-      console.warn('Pendências não é um array válido:', pendencias)
       return []
     }
     
-    console.log(`Filtrando pendências para coluna ${columnId}...`)
-    
     // Garante que kanban_status está definido e é uma string
-    const filtered = pendencias.filter(p => {
+    return pendencias.filter(p => {
       if (!p) return false
       
       // Garante que o ID da pendência é uma string para comparação
@@ -116,18 +104,8 @@ export function KanbanBoard({ pendencias, onUpdatePendencia, onEditPendencia }: 
       // Garante que kanban_status é uma string e usa valor padrão se não existir
       const status = (p.kanban_status || 'A_FAZER').toUpperCase() as KanbanColumn
       
-      console.log(`Pendência ${pendenciaId}:`, {
-        id: pendenciaId,
-        kanban_status: status,
-        status: p.status,
-        responsavel: p.id_responsavel
-      })
-      
       return status === columnId
     })
-    
-    console.log(`Coluna ${columnId} (${filtered.length} itens):`, filtered)
-    return filtered
   }
 
   const activePendencia = activeId ? pendencias.find(p => p.id_pendencia_sinalizada.toString() === activeId.toString()) : null
