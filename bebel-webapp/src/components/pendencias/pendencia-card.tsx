@@ -58,14 +58,9 @@ export function PendenciaCard({ pendencia, onEdit, isDragging = false }: Pendenc
           <div className="flex justify-between items-start gap-1.5 mb-2">
             <div className="flex flex-wrap gap-1.5">
               <Badge variant="outline" className="text-xs h-5 px-2 py-0 border-muted-foreground/30">
-                {getTipoLabel(pendencia.tipo)}
-              </Badge>
-              <Badge 
-                variant="secondary" 
-                className={`text-xs h-5 px-2 py-0 ${getPriorityColor(pendencia.prioridade)}`}
-              >
-                {getPriorityLabel(pendencia.prioridade)}
-              </Badge>
+              {getTipoLabel(pendencia.tipo)}
+            </Badge>
+
             </div>
             <button
               {...attributes}
@@ -76,21 +71,21 @@ export function PendenciaCard({ pendencia, onEdit, isDragging = false }: Pendenc
               <GripVertical className="h-4 w-4 text-muted-foreground" />
             </button>
           </div>
-  
-          <div>
-            <p className="text-sm font-normal line-clamp-3 text-foreground mb-2 p-2">
-              {pendencia.descricao || 'Sem descrição'}
-            </p>
-  
-            {pendencia.pessoa && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground p-1">
-                <User className="h-3 w-3 flex-shrink-0" />
-                <span className="truncate">{pendencia.pessoa.nome_completo || 'Sem nome'}</span>
-              </div>
-            )}
-          </div>
         </div>
-  
+
+        <div className="mt-2">
+          <p className="text-sm p-3 font-normal line-clamp-3 text-foreground mb-2">
+            {pendencia.descricao || 'Sem descrição'}
+          </p>
+
+          {pendencia.pessoa && (
+            <div className="flex items-center gap-1.5 text-xs pl-3 pb-2 text-muted-foreground">
+              <User className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">{pendencia.pessoa.nome_completo || 'Sem nome'}</span>
+            </div>
+          )}
+        </div>
+
         {/* Espaço flexível que empurra o conteúdo inferior para baixo */}
         <div className="flex-grow p-1"></div>
 
@@ -109,14 +104,14 @@ export function PendenciaCard({ pendencia, onEdit, isDragging = false }: Pendenc
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-xs -mr-2 text-muted-foreground hover:text-foreground flex-shrink-0"
+              className="h-6 pr-4 pl-2 text-xs text-muted-foreground hover:text-foreground flex-shrink-0"
               onClick={(e) => {
                 e.stopPropagation()
                 // TODO: Navigate to conversation
                 console.log('Navigate to conversation:', pendencia.conversa?.id_conversa)
               }}
             >
-              <MessageSquare className="h-3 w-3 mr-1.0" /> Ver conversa
+              <MessageSquare className="h-3 w-3 mr-1.5" /> Ver conversa
             </Button>
           )}
         </div>

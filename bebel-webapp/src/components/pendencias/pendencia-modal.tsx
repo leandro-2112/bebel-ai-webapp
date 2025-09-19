@@ -91,7 +91,7 @@ export function PendenciaModal({ pendencia, open, onOpenChange, onSave }: Penden
     if (pendencia) {
       form.reset({
         descricao: pendencia.descricao || "",
-        prioridade: pendencia.prioridade,
+        prioridade: 3, // Valor fixo para prioridade
         status: pendencia.status,
         id_responsavel: pendencia.id_responsavel || undefined,
         resolution_note: pendencia.resolution_note || "",
@@ -230,31 +230,9 @@ export function PendenciaModal({ pendencia, open, onOpenChange, onSave }: Penden
                 )}
               />
 
-              <div className="grid grid-cols-4 gap-4">
-                <FormField
-                  control={form.control}
-                  name="prioridade"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Prioridade</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value?.toString()}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione a prioridade" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="1">1 - Muito Baixa</SelectItem>
-                          <SelectItem value="2">2 - Baixa</SelectItem>
-                          <SelectItem value="3">3 - Média</SelectItem>
-                          <SelectItem value="4">4 - Alta</SelectItem>
-                          <SelectItem value="5">5 - Muito Alta</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="grid grid-cols-1 gap-4">
+                {/* Campo de prioridade removido */}
+                <input type="hidden" {...form.register('prioridade')} />
 
                 <FormField
                   control={form.control}

@@ -122,24 +122,8 @@ export function PendenciasFilters({
           </SelectContent>
         </Select>
 
-        <Select
-          value={filters.prioridade?.toString() || "all"}
-          onValueChange={(value) =>
-            onFiltersChange({ ...filters, prioridade: value === "all" ? null : parseInt(value) })
-          }
-        >
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Prioridade" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas</SelectItem>
-            <SelectItem value="5">Muito Alta</SelectItem>
-            <SelectItem value="4">Alta</SelectItem>
-            <SelectItem value="3">Média</SelectItem>
-            <SelectItem value="2">Baixa</SelectItem>
-            <SelectItem value="1">Muito Baixa</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Filtro de prioridade removido */}
+        <input type="hidden" value={filters.prioridade || ''} />
 
         <Select
           value={filters.responsavel || "all"}
